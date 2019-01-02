@@ -121,6 +121,41 @@ where
     }
 }
 
+struct ParserPure<A>(A)
+where
+    A: Clone;
+
+impl<A> Parser<A> for ParserPure<A>
+where
+    A: Clone,
+{
+    fn parse<'a>(&self, source: &'a str) -> ParseResult<'a, A> {
+        let ParserPure(x) = self;
+        ParseResult::Parsed(source, x.clone())
+    }
+}
+
+impl<FAB, A, B> ParserFunctor<ParserPure<A>, FAB, A, B> for ParserPure<A>
+where
+    FAB: Fn(A) -> B,
+    A: Clone,
+{
+    fn map(self, f: FAB) -> ParserMap<ParserPure<A>, FAB, A, B> {
+        ParserMap(self, f, PhantomData)
+    }
+}
+
+impl<FAPB, PB, A, B> ParserMonad<ParserPure<A>, FAPB, PB, A, B> for ParserPure<A>
+where
+    FAPB: Fn(A) -> PB,
+    PB: Parser<B>,
+    A: Clone,
+{
+    fn bind(self, f: FAPB) -> ParserBind<ParserPure<A>, FAPB, PB, A, B> {
+        ParserBind(self, f, PhantomData, PhantomData, PhantomData)
+    }
+}
+
 struct ParserChar(char);
 
 impl Parser<()> for ParserChar {
@@ -169,6 +204,8 @@ fn main() {
         .bind(|_| ParserChar('b'))
         .bind(|_| ParserChar('c'))
         .bind(|_| ParserChar('d'))
+        .bind(|_| ParserPure(1))
+        .map(|x| x + 1)
         .bind(|_| ParserChar('e'))
         .bind(|_| ParserChar('b'))
         .bind(|_| ParserChar('c'))
