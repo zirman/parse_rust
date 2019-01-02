@@ -6,10 +6,6 @@ enum ParseResult<'a, A> {
     Failed(&'a str),
 }
 
-trait Parser<A> {
-    fn parse<'a, 'b>(&'a self, source: &'b str) -> ParseResult<'b, A>;
-}
-
 trait ParserFunctor<PA, FAB, A, B>
 where
     PA: Parser<A>,
@@ -25,6 +21,10 @@ where
     PB: Parser<B>,
 {
     fn bind(self, f: FAPB) -> ParserBind<PA, FAPB, PB, A, B>;
+}
+
+trait Parser<A> {
+    fn parse<'a, 'b>(&'a self, source: &'b str) -> ParseResult<'b, A>;
 }
 
 struct ParserMap<PA, FAB, A, B>(PA, FAB, PhantomData<A>)
@@ -156,6 +156,45 @@ where
     }
 }
 
+struct ParserOption<PA, A>(PA, PhantomData<A>)
+where
+    PA: Parser<A>;
+
+impl<PA, A> Parser<Option<A>> for ParserOption<PA, A>
+where
+    PA: Parser<A>
+{
+    fn parse<'a>(&self, source: &'a str) -> ParseResult<'a, Option<A>> {
+        let ParserOption(p, _) = self;
+
+        match p.parse(source) {
+            ParseResult::Parsed(source1, x) => ParseResult::Parsed(source1, Some(x)),
+            ParseResult::Failed(_) => ParseResult::Parsed(source, None),
+        }
+    }
+}
+
+impl<PA, FAB, A, B> ParserFunctor<ParserOption<PA, A>, FAB, Option<A>, B> for ParserOption<PA, A>
+where
+    PA: Parser<A>,
+    FAB: Fn(Option<A>) -> B,
+{
+    fn map(self, f: FAB) -> ParserMap<ParserOption<PA, A>, FAB, Option<A>, B> {
+        ParserMap(self, f, PhantomData)
+    }
+}
+
+impl<PA, FAPB, PB, A, B> ParserMonad<ParserOption<PA, A>, FAPB, PB, Option<A>, B> for ParserOption<PA, A>
+where
+    PA: Parser<A>,
+    FAPB: Fn(Option<A>) -> PB,
+    PB: Parser<B>,
+{
+    fn bind(self, f: FAPB) -> ParserBind<ParserOption<PA, A>, FAPB, PB, Option<A>, B> {
+        ParserBind(self, f, PhantomData, PhantomData, PhantomData)
+    }
+}
+
 struct ParserChar(char);
 
 impl Parser<()> for ParserChar {
@@ -194,8 +233,53 @@ where
     }
 }
 
+struct ParserString(&'static str);
+
+impl Parser<()> for ParserString {
+    fn parse<'a>(&self, source: &'a str) -> ParseResult<'a, ()> {
+        let ParserString(s) = self;
+        let mut source_chars = source.chars();
+        let mut i = 0;
+
+        for c in s.chars() {
+            match source_chars.next() {
+                Some(c2) =>
+                    if c != c2 {
+                        return ParseResult::Failed(&source[i..])
+                    },
+                None =>
+                    return ParseResult::Failed(&source[i..]),
+            }
+
+            i += 1;
+        }
+
+        ParseResult::Parsed(&source[i..], ())
+    }
+}
+
+impl<FA, A> ParserFunctor<ParserString, FA, (), A> for ParserString
+where
+    FA: Fn(()) -> A,
+{
+    fn map(self, f: FA) -> ParserMap<ParserString, FA, (), A> {
+        ParserMap(self, f, PhantomData)
+    }
+}
+
+impl<FPA, PA, A> ParserMonad<ParserString, FPA, PA, (), A> for ParserString
+where
+    FPA: Fn(()) -> PA,
+    PA: Parser<A>,
+{
+    fn bind(self, f: FPA) -> ParserBind<ParserString, FPA, PA, (), A> {
+        ParserBind(self, f, PhantomData, PhantomData, PhantomData)
+    }
+}
+
 fn main() {
-    let abc = ParserChar('a')
+    let abc = ParserOption(ParserChar('-'), PhantomData)
+        .bind(|_| ParserChar('a'))
         .map(|_| 1)
         .bind(|_| ParserChar('b'))
         .bind(|_| ParserChar('c'))
@@ -204,9 +288,8 @@ fn main() {
         .bind(|_| ParserChar('b'))
         .bind(|_| ParserChar('c'))
         .bind(|_| ParserChar('d'))
-        .bind(|_| ParserPure(1))
+        .bind(|_| ParserChar('e').bind(|_| ParserPure(1)))
         .map(|x| x + 1)
-        .bind(|_| ParserChar('e'))
         .bind(|_| ParserChar('b'))
         .bind(|_| ParserChar('c'))
         .bind(|_| ParserChar('d'))
@@ -214,9 +297,10 @@ fn main() {
         .bind(|_| ParserChar('b'))
         .bind(|_| ParserChar('c'))
         .bind(|_| ParserChar('d'))
-        .bind(|_| ParserChar('e'));
+        .bind(|_| ParserChar('e'))
+        .bind(|_| ParserString("hello"));
 
-    match abc.parse("abcdebcdebcdebcdebcdebcdebcdebcdebc") {
+    match abc.parse("-abcdebcdebcdebcdehello") {
         ParseResult::Parsed(_, _) => println!("woot"),
         ParseResult::Failed(_) => println!("poo"),
     };
