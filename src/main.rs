@@ -1,3 +1,4 @@
+#![recursion_limit="1024"]
 use std::marker::PhantomData;
 
 #[derive(Debug)]
@@ -278,11 +279,12 @@ where
 }
 
 fn recur() -> impl Parser<()> {
-    return ParserChar('-')
-        .bind(|_| recur());
+    ParserChar('-')
+        .bind(|_| recur())
 }
 
 fn main() {
+    let _ = recur();
     // let abc = ParserOption(ParserChar('-'), PhantomData)
     //     .bind(|_| ParserChar('a'))
     //     .map(|_| 1)
