@@ -277,31 +277,36 @@ where
     }
 }
 
-fn main() {
-    let abc = ParserOption(ParserChar('-'), PhantomData)
-        .bind(|_| ParserChar('a'))
-        .map(|_| 1)
-        .bind(|_| ParserChar('b'))
-        .bind(|_| ParserChar('c'))
-        .bind(|_| ParserChar('d'))
-        .bind(|_| ParserChar('e'))
-        .bind(|_| ParserChar('b'))
-        .bind(|_| ParserChar('c'))
-        .bind(|_| ParserChar('d'))
-        .bind(|_| ParserChar('e').bind(|_| ParserPure(1)))
-        .map(|x| x + 1)
-        .bind(|_| ParserChar('b'))
-        .bind(|_| ParserChar('c'))
-        .bind(|_| ParserChar('d'))
-        .bind(|_| ParserChar('e'))
-        .bind(|_| ParserChar('b'))
-        .bind(|_| ParserChar('c'))
-        .bind(|_| ParserChar('d'))
-        .bind(|_| ParserChar('e'))
-        .bind(|_| ParserString("hello"));
+fn recur() -> impl Parser<()> {
+    return ParserChar('-')
+        .bind(|_| recur());
+}
 
-    match abc.parse("-abcdebcdebcdebcdehello") {
-        ParseResult::Parsed(_, _) => println!("woot"),
-        ParseResult::Failed(_) => println!("poo"),
-    };
+fn main() {
+    // let abc = ParserOption(ParserChar('-'), PhantomData)
+    //     .bind(|_| ParserChar('a'))
+    //     .map(|_| 1)
+    //     .bind(|_| ParserChar('b'))
+    //     .bind(|_| ParserChar('c'))
+    //     .bind(|_| ParserChar('d'))
+    //     .bind(|_| ParserChar('e'))
+    //     .bind(|_| ParserChar('b'))
+    //     .bind(|_| ParserChar('c'))
+    //     .bind(|_| ParserChar('d'))
+    //     .bind(|_| ParserChar('e').bind(|_| ParserPure(1)))
+    //     .map(|x| x + 1)
+    //     .bind(|_| ParserChar('b'))
+    //     .bind(|_| ParserChar('c'))
+    //     .bind(|_| ParserChar('d'))
+    //     .bind(|_| ParserChar('e'))
+    //     .bind(|_| ParserChar('b'))
+    //     .bind(|_| ParserChar('c'))
+    //     .bind(|_| ParserChar('d'))
+    //     .bind(|_| ParserChar('e'))
+    //     .bind(|_| ParserString("hello"));
+
+    // match abc.parse("-abcdebcdebcdebcdehello") {
+    //     ParseResult::Parsed(_, _) => println!("woot"),
+    //     ParseResult::Failed(_) => println!("poo"),
+    // };
 }
